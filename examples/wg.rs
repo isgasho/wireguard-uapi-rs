@@ -6,14 +6,16 @@ use wireguard_uapi;
 use wireguard_uapi::get::{AllowedIp, Device, Peer};
 
 fn main() -> Result<(), failure::Error> {
-    let mut args = env::args();
-    let _prog_name = args.next();
-    let ifname = args.next().expect("Please provide an interface name");
+    // let mut args = env::args();
+    // let _prog_name = args.next();
+    // let ifname = args.next().expect("Please provide an interface name");
 
     let mut wg = wireguard_uapi::Socket::connect()?;
-    let device = wg.get_device(wireguard_uapi::DeviceInterface::from_name(&ifname))?;
+    // let device = wg.get_device(wireguard_uapi::DeviceInterface::from_name(&ifname))?;
 
-    print_device(&device);
+    println!("{:#?}", wg.list_device_names()?);
+
+    // print_device(&device);
 
     Ok(())
 }

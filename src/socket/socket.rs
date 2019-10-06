@@ -119,6 +119,61 @@ impl Socket {
         Ok(())
     }
 
+    pub fn list_device_names(&self) -> Result<Vec<String>, failure::Error> {
+        use neli::consts::{Arphrd, Ifla, Rtm};
+        use neli::rtnl::Ifinfomsg;
+        use neli::rtnl::Rtattr;
+
+        let infomsg = {
+            let ifi_family =
+                neli::consts::rtnl::RtAddrFamily::UnrecognizedVariant(libc::AF_UNSPEC as u8);
+            // Arphrd::Netrom corresponds to 0. Not sure why 0 is necessary here but this is what the
+            // embedded C library does.
+            let ifi_type = Arphrd::Netrom;
+            let ifi_index = 0;
+            let ifi_flags = vec![];
+            let rtattrs: Vec<Rtattr<Ifla, Vec<u8>>> = vec![];
+            Ifinfomsg::new(ifi_family, ifi_type, ifi_index, ifi_flags, rtattrs)
+        };
+
+        let nlmsg = {
+            let len = None;
+            let nl_type = Rtm::Getlink;
+            let flags = vec![NlmF::Request, NlmF::Ack, NlmF::Dump];
+            let seq = None;
+            let pid = None;
+            let payload = infomsg;
+            Nlmsghdr::new(len, nl_type, flags, seq, pid, payload)
+        };
+
+        let mut sock = NlSocket::connect(NlFamily::Route, None, None, true)?;
+        sock.send_nl(nlmsg)?;
+
+        let mut iter = sock.iter::<Nlmsg, Ifinfomsg<Ifla>>();
+
+        while let Some(Ok(response)) = iter.next() {
+            println!("new link:");
+            match response.nl_type {
+                Nlmsg::Error => panic!("err"),
+                Nlmsg::Done => break,
+                _ => (),
+            };
+
+            let attrs = response.nl_payload.rtattrs;
+            for attr in attrs {
+                match attr.rta_type {
+                    // Ifla::UnrecognizedVariant(IFLA_LINKINFO) => {
+                    //     println!("Hello! {:#?}", attr.rta_payload)
+                    // }
+                    Ifla::Ifname => println!("name: {:#?}", String::from_utf8(attr.rta_payload)?),
+                    _ => {}
+                };
+            }
+        }
+
+        Ok(vec![])
+    }
+
     pub fn add_device(&self, ifname: &str) -> Result<(), LinkDeviceError> {
         let mut sock = NlSocket::connect(NlFamily::Route, None, None, true)?;
         sock.send_nl(link_message(ifname, WireGuardDeviceLinkOperation::Add)?)?;
